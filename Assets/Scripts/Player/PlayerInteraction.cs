@@ -71,16 +71,25 @@ public class PlayerInteraction : MonoBehaviour
             Debug.Log($"PlayerInteraction: Raycast golpeó a '{hit.collider.name}' (Tag: {hit.collider.tag})");
 
             // 1. Verificar si es un objeto Recogible (por Tag o Componente)
-            if (hit.collider.CompareTag("Recogible") || hit.collider.GetComponent<PickupableObject>() != null)
+            // Búsqueda inteligente: primero en el collider, luego en padres, luego en hijos
+            PickupableObject pickup = hit.collider.GetComponent<PickupableObject>();
+            if (pickup == null) pickup = hit.collider.GetComponentInParent<PickupableObject>();
+            if (pickup == null) pickup = hit.collider.GetComponentInChildren<PickupableObject>();
+            
+            if (pickup != null || hit.collider.CompareTag("Recogible"))
             {
-                PickupableObject pickup = hit.collider.GetComponent<PickupableObject>();
                 if (pickup != null)
                 {
+                    Debug.Log($"✅ PlayerInteraction: Recogiendo '{pickup.gameObject.name}' (script encontrado en '{pickup.transform.name}')");
                     currentHeldObject = pickup;
                     currentHeldObject.OnPickUp(holdPoint);
                     
                     if (animator != null) animator.SetTrigger("PickUp");
                     return;
+                }
+                else
+                {
+                    Debug.LogWarning($"⚠️ PlayerInteraction: Objeto '{hit.collider.name}' tiene tag 'Recogible' pero NO tiene script PickupableObject.");
                 }
             }
 
@@ -126,19 +135,27 @@ public class PlayerInteraction : MonoBehaviour
                 {
                     Debug.Log($"PlayerInteraction: Script TrashCan encontrado en '{bin.name}'.");
                     
-                    // Abrir el basurero y tirar la basura
-                    bin.Open();
-                    currentHeldObject.OnPlaceInTrash();
+                    // 1. Primero soltar el objeto de la mano del jugador (SIN activar física)
+                    PickupableObject objectToTrash = currentHeldObject;
+                    currentHeldObject.OnDrop(false); // false = no activar física, será absorbido
                     currentHeldObject = null;
                     if (animator != null) animator.SetTrigger("Drop");
+                    
+                    // 2. Abrir el basurero
+                    bin.Open();
+                    
+                    // 3. Iniciar la absorción (ahora el objeto está libre en el mundo)
+                    objectToTrash.OnPlaceInTrash();
                 }
                 else
                 {
                     Debug.LogWarning("PlayerInteraction: Objeto tiene tag 'Basurero' pero NO tiene script 'TrashCan' (ni en hijos/padres).");
                     // Comportamiento legacy
-                    currentHeldObject.OnPlaceInTrash();
+                    PickupableObject objectToTrash = currentHeldObject;
+                    currentHeldObject.OnDrop(false); // false = no activar física
                     currentHeldObject = null;
                     if (animator != null) animator.SetTrigger("Drop");
+                    objectToTrash.OnPlaceInTrash();
                 }
                 return;
             }

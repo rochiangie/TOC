@@ -5,6 +5,11 @@ TagManager:
   serializedVersion: 3
   tags:
   - Basurero
+  - Recogible
+  - Plastico
+  - Peligroso
+  - Papel
+  - Vidrio
   layers:
   - Default
   - TransparentFX
