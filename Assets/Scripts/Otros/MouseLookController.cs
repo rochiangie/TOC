@@ -20,7 +20,7 @@ public class MouseLookController : MonoBehaviour
     [SerializeField] private bool _controlsActive = true;
 
     [Tooltip("La variable que bloquea la cámara por UI (e.g., panel de Tools).")]
-    [SerializeField] private bool _isCameraLocked = false; // 🚨 NUEVA BANDERA 🚨
+    [SerializeField] private bool _isCameraLocked = false; 
 
     // 📢 PROPIEDAD PÚBLICA: Permite que PlayerMovement y otros scripts lean el estado sin errores.
     public bool ControlsActive
@@ -49,29 +49,13 @@ public class MouseLookController : MonoBehaviour
     void Update()
     {
         // 🛑 LÓGICA DE BLOQUEO CRÍTICO 🛑
-        // Salir si el control está inactivo (menú de pausa general)
-        // O si la cámara está bloqueada (panel de Tools)
-        if (!_controlsActive || _isCameraLocked) return; // 🚨 COMPROBACIÓN AÑADIDA 🚨
+        if (!_controlsActive || _isCameraLocked) return;
 
-        // 1. Asignación Dinámica
-        if (headLookTarget == null)
-        {
-            TryAssignHeadTarget();
-            if (headLookTarget == null) return;
-        }
-
-        // 2. Cálculo del Input y Rotación
-        float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * Time.deltaTime;
-        float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity * Time.deltaTime;
-
-        // ROTACIÓN HORIZONTAL (Lados): Aplicada al Cuerpo (este transform)
-        transform.Rotate(Vector3.up * mouseX);
-
-        // ROTACIÓN VERTICAL (Arriba/Abajo): Aplicada a la Cabeza
-        rotationX -= mouseY;
-        rotationX = Mathf.Clamp(rotationX, downLimit, upLimit);
-
-        headLookTarget.localRotation = Quaternion.Euler(rotationX, 0f, 0f);
+        // La rotación del personaje y la cámara ahora son manejadas por:
+        // 1. PlayerMovement (Rotación del personaje hacia el movimiento)
+        // 2. Cinemachine (Rotación de la cámara)
+        
+        // Este script solo gestiona el cursor.
     }
 
     // ================== Funciones de Comunicación y Control ==================
@@ -104,7 +88,6 @@ public class MouseLookController : MonoBehaviour
     }
 
     /// <summary>
-    /// 🚨 NUEVA FUNCIÓN 🚨
     /// Bloquea o desbloquea la rotación de la cámara, usado específicamente para Menús Flotantes (Tools)
     /// donde el juego sigue corriendo pero la cámara debe estar fija.
     /// </summary>
