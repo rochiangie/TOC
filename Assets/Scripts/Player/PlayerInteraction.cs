@@ -5,7 +5,7 @@ public class PlayerInteraction : MonoBehaviour
     [Header("Settings")]
     [Header("Interaction Settings")]
     public float interactionDistance = 3f;
-    public LayerMask interactableLayer;
+    public LayerMask interactableLayer = ~0; // Por defecto detecta todo
     public KeyCode interactKey = KeyCode.E;
     
     [Header("References")]
@@ -14,6 +14,18 @@ public class PlayerInteraction : MonoBehaviour
     public Animator animator;
 
     private PickupableObject currentHeldObject;
+
+    private void Start()
+    {
+        if (holdPoint == null)
+        {
+            GameObject hp = new GameObject("HoldPoint");
+            hp.transform.SetParent(cameraTransform != null ? cameraTransform : transform);
+            hp.transform.localPosition = new Vector3(0.5f, -0.5f, 1f); // Posición mano derecha aprox
+            holdPoint = hp.transform;
+            Debug.Log("🔧 PlayerInteraction: Se creó un 'HoldPoint' automático.");
+        }
+    }
 
     private void Update()
     {

@@ -64,6 +64,16 @@ public class PlayerMovement : MonoBehaviour
         if (animator == null) animator = GetComponent<Animator>();
     }
 
+    void Start()
+    {
+        // 🚨 SEGURIDAD: Detener cualquier inercia inicial loca
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+    }
+
     void Update()
     {
         // 1. Detección de suelo por RAYCAST (Más preciso que Sphere)
@@ -91,18 +101,20 @@ public class PlayerMovement : MonoBehaviour
         isRunning = Input.GetKey(runKey);
     }
 
+    [Header("Configuración de Rotación")]
+    public bool rotateWithCamera = true; // Si es true, el personaje siempre mira a la cámara (Estilo Shooter/Strafing)
+
+    // ... (resto de variables)
+
     void FixedUpdate()
     {
         // === Salto ===
         if (jumpScheduled)
         {
-            // Resetear velocidad vertical antes de saltar para consistencia
             Vector3 vel = rb.linearVelocity;
             vel.y = 0;
             rb.linearVelocity = vel;
-            
             rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-
             if (animator != null) animator.SetTrigger(JumpTriggerHash);
             jumpScheduled = false;
         }
@@ -110,26 +122,44 @@ public class PlayerMovement : MonoBehaviour
         // === Movimiento ===
         float x = Input.GetAxis("Horizontal");
         float z = Input.GetAxis("Vertical");
-        Vector3 direction = new Vector3(x, 0f, z).normalized;
-
+        
         float currentMaxSpeed = isRunning ? runSpeed : moveSpeed;
         Vector3 targetVelocity = Vector3.zero;
 
-        if (direction.magnitude >= 0.1f)
+        if (rotateWithCamera && cameraTransform != null)
         {
-            float targetAngle = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg;
+            // MODO 1: STRAFING (El personaje gira con la cámara)
+            // Rotamos el cuerpo para que coincida con la cámara
+            float cameraYaw = cameraTransform.eulerAngles.y;
+            float smoothYaw = Mathf.SmoothDampAngle(transform.eulerAngles.y, cameraYaw, ref turnSmoothVelocity, turnSmoothTime);
+            transform.rotation = Quaternion.Euler(0f, smoothYaw, 0f);
+
+            // El movimiento es relativo al cuerpo (que ya mira a la cámara)
+            // W = Adelante, S = Atrás, A = Izquierda, D = Derecha
+            Vector3 moveDir = transform.right * x + transform.forward * z;
             
-            // Moverse relativo a la cámara si existe
-            if (cameraTransform != null)
+            // Solo nos movemos si hay input
+            if (moveDir.magnitude >= 0.1f)
             {
-                targetAngle += cameraTransform.eulerAngles.y;
+                targetVelocity = moveDir.normalized * currentMaxSpeed;
             }
+        }
+        else
+        {
+            // MODO 2: ADVENTURE (El personaje mira hacia donde camina)
+            Vector3 direction = new Vector3(x, 0f, z).normalized;
 
-            float angle = Mathf.SmoothDampAngle(transform.eulerAngles.y, targetAngle, ref turnSmoothVelocity, turnSmoothTime);
-            transform.rotation = Quaternion.Euler(0f, angle, 0f);
+            if (direction.magnitude >= 0.1f)
+            {
+                float targetAngle = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg;
+                if (cameraTransform != null) targetAngle += cameraTransform.eulerAngles.y;
 
-            Vector3 moveDir = Quaternion.Euler(0f, targetAngle, 0f) * Vector3.forward;
-            targetVelocity = moveDir.normalized * currentMaxSpeed;
+                float angle = Mathf.SmoothDampAngle(transform.eulerAngles.y, targetAngle, ref turnSmoothVelocity, turnSmoothTime);
+                transform.rotation = Quaternion.Euler(0f, angle, 0f);
+
+                Vector3 moveDir = Quaternion.Euler(0f, targetAngle, 0f) * Vector3.forward;
+                targetVelocity = moveDir.normalized * currentMaxSpeed;
+            }
         }
 
         // === Aplicar Velocidad (Preservando Gravedad) ===
@@ -140,10 +170,7 @@ public class PlayerMovement : MonoBehaviour
         // Aceleración suave
         Vector3 newVelHoriz = Vector3.Lerp(currentVelHoriz, targetVelHoriz, 15f * Time.fixedDeltaTime);
         
-        // Combinar con velocidad vertical existente
         Vector3 finalVel = new Vector3(newVelHoriz.x, currentVel.y, newVelHoriz.z);
-        
-        // 🚨 SEGURIDAD: Limitar velocidad de subida (por si acaso colisiones raras)
         if (finalVel.y > 20f) finalVel.y = 20f;
 
         rb.linearVelocity = finalVel;
@@ -151,6 +178,8 @@ public class PlayerMovement : MonoBehaviour
         // Animación
         if (animator != null)
         {
+            // Nota: Si usas Blend Trees para Strafing, aquí deberías pasar X y Z por separado.
+            // Por ahora mantenemos "Speed" general.
             animator.SetFloat(SpeedFloatHash, newVelHoriz.magnitude);
         }
     }
