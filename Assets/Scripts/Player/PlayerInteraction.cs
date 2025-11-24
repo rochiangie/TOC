@@ -124,20 +124,13 @@ public class PlayerInteraction : MonoBehaviour
                 
                 if (bin != null)
                 {
-                    Debug.Log($"PlayerInteraction: Script TrashCan encontrado en '{bin.name}'. Estado isOpen: {bin.isOpen}");
+                    Debug.Log($"PlayerInteraction: Script TrashCan encontrado en '{bin.name}'.");
                     
-                    if (bin.isOpen)
-                    {
-                        Debug.Log("PlayerInteraction: El tacho está ABIERTO. Intentando tirar basura...");
-                        currentHeldObject.OnPlaceInTrash();
-                        currentHeldObject = null;
-                        if (animator != null) animator.SetTrigger("Drop");
-                    }
-                    else
-                    {
-                        Debug.Log("PlayerInteraction: El tacho está CERRADO. Intentando ABRIRLO...");
-                        bin.Interact(false);
-                    }
+                    // Abrir el basurero y tirar la basura
+                    bin.Open();
+                    currentHeldObject.OnPlaceInTrash();
+                    currentHeldObject = null;
+                    if (animator != null) animator.SetTrigger("Drop");
                 }
                 else
                 {

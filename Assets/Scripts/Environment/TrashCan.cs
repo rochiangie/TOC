@@ -2,65 +2,61 @@ using UnityEngine;
 
 public class TrashCan : MonoBehaviour, IInteractable
 {
+    public enum TrashType
+    {
+        Amarillo,  // Plástico/Envases
+        Azul,      // Papel/Cartón
+        Verde,     // Vidrio
+        Rojo       // Residuos peligrosos
+    }
+
+    [Header("Trash Type")]
+    public TrashType trashType = TrashType.Amarillo;
+    
     [Header("Animation Settings")]
     public Animator animator;
     public string openParamName = "IsOpened";
-    public string closeParamName = "IsClosed";
 
-    [Header("Debug State")]
-    public bool isOpen = false; // Ahora es visible en el Inspector
+    [Header("Label Settings")]
+    public Vector3 labelOffset = new Vector3(0, 2, 0); // Altura del cartel sobre el basurero
+    public float labelDistance = 5f; // Distancia máxima para ver el cartel
+
+    private bool isOpen = false;
+    private Color labelColor;
+    private string labelText;
 
     private void Awake()
     {
         if (animator == null) animator = GetComponent<Animator>();
         
-        if (animator == null) Debug.LogError($"❌ TrashCan: NO se encontró Animator en {name}");
-        else Debug.Log($"✅ TrashCan: Animator encontrado en {name}");
-    }
-
-    private void Start()
-    {
-        // Sincronizar estado inicial
-        if (animator != null)
+        // Configurar color y texto según el tipo
+        switch (trashType)
         {
-            animator.SetBool(openParamName, isOpen);
-            animator.SetBool(closeParamName, !isOpen);
+            case TrashType.Amarillo:
+                labelColor = Color.yellow;
+                labelText = "AMARILLO\nPlástico/Envases";
+                break;
+            case TrashType.Azul:
+                labelColor = Color.blue;
+                labelText = "AZUL\nPapel/Cartón";
+                break;
+            case TrashType.Verde:
+                labelColor = Color.green;
+                labelText = "VERDE\nVidrio";
+                break;
+            case TrashType.Rojo:
+                labelColor = Color.red;
+                labelText = "ROJO\nPeligrosos";
+                break;
         }
     }
 
     // Implementación de la interfaz IInteractable
     public void Interact(bool isBagFull)
     {
-        Debug.Log($"TrashCan: Interact llamado en {name}. Estado actual isOpen: {isOpen}");
-        ToggleLid();
+        Open();
     }
 
-    [ContextMenu("Probar Abrir/Cerrar (Test Toggle)")]
-    public void ToggleLid()
-    {
-        isOpen = !isOpen;
-        Debug.Log($"TrashCan: ToggleLid ejecutado. Nuevo estado isOpen: {isOpen}");
-
-        if (animator != null)
-        {
-            if (isOpen)
-            {
-                // ABRIR
-                animator.SetBool(openParamName, true);
-                animator.SetBool(closeParamName, false);
-                Debug.Log($"TrashCan: Animator -> SetBool({openParamName}, true), SetBool({closeParamName}, false)");
-            }
-            else
-            {
-                // CERRAR
-                animator.SetBool(openParamName, false);
-                animator.SetBool(closeParamName, true);
-                Debug.Log($"TrashCan: Animator -> SetBool({openParamName}, false), SetBool({closeParamName}, true)");
-            }
-        }
-    }
-
-    // Función extra por si quieres abrirlo automáticamente al tirar basura desde otro script
     public void Open()
     {
         if (!isOpen)
@@ -69,42 +65,35 @@ public class TrashCan : MonoBehaviour, IInteractable
             if (animator != null)
             {
                 animator.SetBool(openParamName, true);
-                animator.SetBool(closeParamName, false);
-            }
-        }
-    }
-
-    public void Close()
-    {
-        if (isOpen)
-        {
-            isOpen = false;
-            if (animator != null)
-            {
-                animator.SetBool(openParamName, false);
-                animator.SetBool(closeParamName, true);
             }
         }
     }
 
     void OnGUI()
     {
-        // Solo mostrar si el jugador está cerca (opcional, por ahora mostramos siempre para debug)
-        Vector3 screenPos = Camera.main.WorldToScreenPoint(transform.position);
-        if (screenPos.z > 0 && screenPos.z < 10)
+        // Mostrar cartel solo si el jugador está cerca
+        if (Camera.main == null) return;
+        
+        float distance = Vector3.Distance(Camera.main.transform.position, transform.position);
+        if (distance > labelDistance) return;
+
+        Vector3 labelWorldPos = transform.position + labelOffset;
+        Vector3 screenPos = Camera.main.WorldToScreenPoint(labelWorldPos);
+        
+        if (screenPos.z > 0)
         {
-            GUI.color = Color.black;
-            GUI.Label(new Rect(screenPos.x, Screen.height - screenPos.y, 300, 20), $"Bin: {name}");
+            // Fondo del cartel
+            GUI.color = new Color(0, 0, 0, 0.7f);
+            GUI.Box(new Rect(screenPos.x - 60, Screen.height - screenPos.y - 30, 120, 60), "");
             
-            GUI.color = isOpen ? Color.green : Color.red;
-            GUI.Label(new Rect(screenPos.x, Screen.height - screenPos.y + 20, 300, 20), $"Script isOpen: {isOpen}");
+            // Texto del cartel
+            GUI.color = labelColor;
+            GUIStyle style = new GUIStyle(GUI.skin.label);
+            style.alignment = TextAnchor.MiddleCenter;
+            style.fontSize = 14;
+            style.fontStyle = FontStyle.Bold;
             
-            if (animator != null)
-            {
-                bool animOpen = animator.GetBool(openParamName);
-                GUI.color = animOpen ? Color.green : Color.red;
-                GUI.Label(new Rect(screenPos.x, Screen.height - screenPos.y + 40, 300, 20), $"Anim '{openParamName}': {animOpen}");
-            }
+            GUI.Label(new Rect(screenPos.x - 60, Screen.height - screenPos.y - 30, 120, 60), labelText, style);
         }
     }
 }
