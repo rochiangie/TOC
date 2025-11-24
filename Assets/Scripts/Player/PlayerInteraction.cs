@@ -17,9 +17,25 @@ public class PlayerInteraction : MonoBehaviour
 
     private void Start()
     {
+        // 1. Usar la Cámara Principal (Normal)
+        if (cameraTransform == null)
+        {
+            if (Camera.main != null)
+            {
+                cameraTransform = Camera.main.transform;
+                Debug.Log($"✅ PlayerInteraction: Usando Camera.main ('{cameraTransform.name}').");
+            }
+            else
+            {
+                Debug.LogError("❌ PlayerInteraction: No se encontró ninguna cámara etiquetada como 'MainCamera'.");
+            }
+        }
+
+        // 2. Crear HoldPoint si no existe
         if (holdPoint == null)
         {
             GameObject hp = new GameObject("HoldPoint");
+            // Si tenemos cámara, lo ponemos hijo de la cámara para que gire con ella
             hp.transform.SetParent(cameraTransform != null ? cameraTransform : transform);
             hp.transform.localPosition = new Vector3(0.5f, -0.5f, 1f); // Posición mano derecha aprox
             holdPoint = hp.transform;
@@ -46,9 +62,14 @@ public class PlayerInteraction : MonoBehaviour
     {
         if (cameraTransform == null) cameraTransform = Camera.main.transform;
 
+        // DEBUG VISUAL: Dibuja una línea roja en la escena para ver hacia dónde apunta el rayo
+        Debug.DrawRay(cameraTransform.position, cameraTransform.forward * interactionDistance, Color.red, 2f);
+
         RaycastHit hit;
         if (Physics.Raycast(cameraTransform.position, cameraTransform.forward, out hit, interactionDistance, interactableLayer))
         {
+            Debug.Log($"PlayerInteraction: Raycast golpeó a '{hit.collider.name}' (Tag: {hit.collider.tag})");
+
             // 1. Verificar si es un objeto Recogible (por Tag o Componente)
             if (hit.collider.CompareTag("Recogible") || hit.collider.GetComponent<PickupableObject>() != null)
             {
@@ -63,12 +84,24 @@ public class PlayerInteraction : MonoBehaviour
                 }
             }
 
-            // 2. Soporte Legacy para IInteractable (si aún lo usas)
+            // 2. Verificar si es un objeto Interactuable (como el Basurero para abrir/cerrar)
             IInteractable interactable = hit.collider.GetComponent<IInteractable>();
+            if (interactable == null) interactable = hit.collider.GetComponentInChildren<IInteractable>(); // Buscar en hijos
+            if (interactable == null) interactable = hit.collider.GetComponentInParent<IInteractable>();   // Buscar en padres
+
             if (interactable != null)
             {
-                interactable.Interact(false); // Asumimos false para isBagFull por ahora
+                Debug.Log($"PlayerInteraction: Interactuando con '{interactable.GetType().Name}' en objeto '{hit.collider.name}'.");
+                interactable.Interact(false); 
             }
+            else
+            {
+                Debug.Log("PlayerInteraction: El objeto golpeado NO es interactuable ni recogible (ni en hijos/padres).");
+            }
+        }
+        else
+        {
+            Debug.Log("PlayerInteraction: Raycast NO golpeó nada (aire).");
         }
     }
 
@@ -82,11 +115,38 @@ public class PlayerInteraction : MonoBehaviour
         {
             if (hit.collider.CompareTag("Basurero"))
             {
-                // Tirar al basurero
-                currentHeldObject.OnPlaceInTrash();
-                currentHeldObject = null;
+                Debug.Log("PlayerInteraction: Mirando objeto con tag 'Basurero'");
                 
-                if (animator != null) animator.SetTrigger("Drop");
+                // Verificar si tiene el script TrashCan (Búsqueda inteligente)
+                TrashCan bin = hit.collider.GetComponent<TrashCan>();
+                if (bin == null) bin = hit.collider.GetComponentInChildren<TrashCan>();
+                if (bin == null) bin = hit.collider.GetComponentInParent<TrashCan>();
+                
+                if (bin != null)
+                {
+                    Debug.Log($"PlayerInteraction: Script TrashCan encontrado en '{bin.name}'. Estado IsOpen: {bin.IsOpen}");
+                    
+                    if (bin.IsOpen)
+                    {
+                        Debug.Log("PlayerInteraction: El tacho está ABIERTO. Intentando tirar basura...");
+                        currentHeldObject.OnPlaceInTrash();
+                        currentHeldObject = null;
+                        if (animator != null) animator.SetTrigger("Drop");
+                    }
+                    else
+                    {
+                        Debug.Log("PlayerInteraction: El tacho está CERRADO. Intentando ABRIRLO...");
+                        bin.Interact(false);
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("PlayerInteraction: Objeto tiene tag 'Basurero' pero NO tiene script 'TrashCan' (ni en hijos/padres).");
+                    // Comportamiento legacy
+                    currentHeldObject.OnPlaceInTrash();
+                    currentHeldObject = null;
+                    if (animator != null) animator.SetTrigger("Drop");
+                }
                 return;
             }
         }
