@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 
 public class PlayerInteraction : MonoBehaviour
 {
@@ -8,12 +9,17 @@ public class PlayerInteraction : MonoBehaviour
     public LayerMask interactableLayer = ~0; // Por defecto detecta todo
     public KeyCode interactKey = KeyCode.E;
     
+    [Header("Pickup Settings")]
+    [Tooltip("Tiempo en segundos antes de que el objeto aparezca en la mano (para animación de agacharse)")]
+    public float pickupDelay = 0.8f;
+    
     [Header("References")]
     public Transform cameraTransform;
     public Transform holdPoint; // Asigna esto en el Inspector (un hijo del Player/Camera)
     public Animator animator;
 
     private PickupableObject currentHeldObject;
+    private bool isPickingUp = false; // Para prevenir múltiples recogidas durante la animación
 
     private void Start()
     {
@@ -51,7 +57,7 @@ public class PlayerInteraction : MonoBehaviour
             {
                 TryDropOrTrash();
             }
-            else
+            else if (!isPickingUp) // Solo permitir recoger si no está en proceso de recogida
             {
                 TryPickUp();
             }
@@ -81,10 +87,9 @@ public class PlayerInteraction : MonoBehaviour
                 if (pickup != null)
                 {
                     Debug.Log($"✅ PlayerInteraction: Recogiendo '{pickup.gameObject.name}' (script encontrado en '{pickup.transform.name}')");
-                    currentHeldObject = pickup;
-                    currentHeldObject.OnPickUp(holdPoint);
                     
-                    if (animator != null) animator.SetTrigger("PickUp");
+                    // Iniciar corrutina de recogida con delay
+                    StartCoroutine(PickUpWithDelay(pickup));
                     return;
                 }
                 else
@@ -114,6 +119,30 @@ public class PlayerInteraction : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Corrutina que maneja el delay entre activar la animación y recoger el objeto
+    /// </summary>
+    private IEnumerator PickUpWithDelay(PickupableObject pickup)
+    {
+        isPickingUp = true;
+        
+        // 1. Activar animación de agacharse
+        if (animator != null) animator.SetTrigger("PickUp");
+        
+        Debug.Log($"🎬 Animación de agacharse iniciada. Esperando {pickupDelay} segundos...");
+        
+        // 2. Esperar el delay (tiempo de la animación de agacharse)
+        yield return new WaitForSeconds(pickupDelay);
+        
+        // 3. Ahora sí, recoger el objeto y ponerlo en la mano
+        currentHeldObject = pickup;
+        currentHeldObject.OnPickUp(holdPoint);
+        
+        Debug.Log($"✅ Objeto '{pickup.gameObject.name}' ahora en la mano del jugador");
+        
+        isPickingUp = false;
+    }
+
     private void TryDropOrTrash()
     {
         if (cameraTransform == null) cameraTransform = Camera.main.transform;
@@ -135,26 +164,66 @@ public class PlayerInteraction : MonoBehaviour
                 {
                     Debug.Log($"PlayerInteraction: Script TrashCan encontrado en '{bin.name}'.");
                     
-                    // 1. Primero soltar el objeto de la mano del jugador (SIN activar física)
+                    // VALIDACIÓN: Verificar si el objeto es basura y si coincide con el tipo de basurero
+                    TrashObject trashObj = currentHeldObject as TrashObject;
+                    
+                    if (trashObj != null)
+                    {
+                        // Verificar si el tipo de basura coincide con el tipo de basurero
+                        if (!trashObj.CanGoInTrashCan(bin.trashType))
+                        {
+                            // ❌ TIPO INCORRECTO
+                            Debug.LogWarning($"❌ ¡Basura incorrecta! Este es un basurero {bin.trashType} y estás intentando tirar basura tipo {trashObj.trashType}");
+                            
+                            // Mostrar mensaje visual al jugador
+                            string binColorName = GetTrashTypeName(bin.trashType);
+                            string trashColorName = GetTrashTypeName((TrashCan.TrashType)(int)trashObj.trashType);
+                            
+                            if (FeedbackMessageUI.Instance != null)
+                            {
+                                FeedbackMessageUI.Instance.ShowError(
+                                    $"❌ ¡Basurero Incorrecto!\n" +
+                                    $"Este basurero es para: {binColorName}\n" +
+                                    $"Tu basura es: {trashColorName}",
+                                    3f
+                                );
+                            }
+                            
+                            return; // No permitir la acción
+                        }
+                        
+                        // ✅ TIPO CORRECTO
+                        Debug.Log($"✅ ¡Correcto! Basura {trashObj.trashType} en basurero {bin.trashType}");
+                        
+                        // Mostrar mensaje de éxito
+                        if (FeedbackMessageUI.Instance != null)
+                        {
+                            FeedbackMessageUI.Instance.ShowSuccess("✅ ¡Excelente! Basura clasificada correctamente", 2f);
+                        }
+                    }
+                    
+                    // 1. Activar animación de tirar
+                    if (animator != null) animator.SetTrigger("Throw");
+                    
+                    // 2. Soltar el objeto de la mano del jugador (SIN activar física)
                     PickupableObject objectToTrash = currentHeldObject;
                     currentHeldObject.OnDrop(false); // false = no activar física, será absorbido
                     currentHeldObject = null;
-                    if (animator != null) animator.SetTrigger("Drop");
                     
-                    // 2. Abrir el basurero
+                    // 3. Abrir el basurero
                     bin.Open();
                     
-                    // 3. Iniciar la absorción (ahora el objeto está libre en el mundo)
+                    // 4. Iniciar la absorción (ahora el objeto está libre en el mundo)
                     objectToTrash.OnPlaceInTrash();
                 }
                 else
                 {
                     Debug.LogWarning("PlayerInteraction: Objeto tiene tag 'Basurero' pero NO tiene script 'TrashCan' (ni en hijos/padres).");
                     // Comportamiento legacy
+                    if (animator != null) animator.SetTrigger("Throw");
                     PickupableObject objectToTrash = currentHeldObject;
                     currentHeldObject.OnDrop(false); // false = no activar física
                     currentHeldObject = null;
-                    if (animator != null) animator.SetTrigger("Drop");
                     objectToTrash.OnPlaceInTrash();
                 }
                 return;
@@ -165,5 +234,25 @@ public class PlayerInteraction : MonoBehaviour
         currentHeldObject.OnDrop();
         currentHeldObject = null;
         if (animator != null) animator.SetTrigger("Drop");
+    }
+
+    /// <summary>
+    /// Convierte el tipo de basurero a un nombre descriptivo en español
+    /// </summary>
+    private string GetTrashTypeName(TrashCan.TrashType type)
+    {
+        switch (type)
+        {
+            case TrashCan.TrashType.Amarillo:
+                return "AMARILLO (Plástico/Envases)";
+            case TrashCan.TrashType.Azul:
+                return "AZUL (Papel/Cartón)";
+            case TrashCan.TrashType.Verde:
+                return "VERDE (Vidrio)";
+            case TrashCan.TrashType.Rojo:
+                return "ROJO (Peligrosos)";
+            default:
+                return "Desconocido";
+        }
     }
 }

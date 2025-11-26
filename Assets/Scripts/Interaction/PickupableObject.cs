@@ -21,39 +21,95 @@ public abstract class PickupableObject : MonoBehaviour
             Debug.LogWarning($"⚠️ PickupableObject en '{gameObject.name}': No se encontró Rigidbody (ni en padres).");
         if (coll == null)
             Debug.LogWarning($"⚠️ PickupableObject en '{gameObject.name}': No se encontró Collider (ni en padres/hijos).");
+        
+        // DEBUG: Mostrar la jerarquía
+        if (rb != null)
+        {
+            Debug.Log($"🔍 PickupableObject en '{gameObject.name}': Rigidbody encontrado en '{rb.gameObject.name}'");
+        }
     }
 
     public virtual void OnPickUp(Transform holder)
     {
         isHeld = true;
         
-        // Determinar qué transform mover: el que tiene el Rigidbody (objeto raíz) o este transform
-        Transform objectToMove = (rb != null) ? rb.transform : transform;
+        // MEJORADO: Determinar el objeto raíz a mover
+        // Prioridad: 1) Objeto con Rigidbody, 2) Objeto raíz de la jerarquía, 3) Este objeto
+        Transform objectToMove = null;
+        
+        if (rb != null)
+        {
+            // Si hay Rigidbody, usar ese transform (es el objeto físico principal)
+            objectToMove = rb.transform;
+        }
+        else
+        {
+            // Si no hay Rigidbody, buscar el objeto raíz de la jerarquía
+            objectToMove = transform.root;
+            
+            // Si el root es el mismo que este objeto, usar este
+            if (objectToMove == transform)
+            {
+                objectToMove = transform;
+            }
+        }
+        
+        Debug.Log($"📦 PickupableObject: Script en '{gameObject.name}' → Moviendo objeto raíz '{objectToMove.name}' al HoldPoint");
+        Debug.Log($"   Jerarquía: {GetHierarchyPath(transform)}");
         
         if (rb)
         {
             rb.isKinematic = true; // Desactivar física al sostener
             rb.interpolation = RigidbodyInterpolation.None;
         }
-        if (coll)
+        
+        // Desactivar TODOS los colliders en el objeto raíz y sus hijos
+        Collider[] allColliders = objectToMove.GetComponentsInChildren<Collider>();
+        foreach (Collider col in allColliders)
         {
-            coll.enabled = false; // Desactivar colisión para no chocar con el jugador
+            col.enabled = false;
         }
-
+        
         // Parentar el objeto raíz completo al HoldPoint
         objectToMove.SetParent(holder);
         objectToMove.localPosition = Vector3.zero;
         objectToMove.localRotation = Quaternion.identity;
-        
-        Debug.Log($"📦 PickupableObject: Moviendo '{objectToMove.name}' al HoldPoint (script está en '{gameObject.name}')");
+    }
+    
+    /// <summary>
+    /// Helper para debugging: muestra la ruta completa en la jerarquía
+    /// </summary>
+    private string GetHierarchyPath(Transform t)
+    {
+        string path = t.name;
+        while (t.parent != null)
+        {
+            t = t.parent;
+            path = t.name + "/" + path;
+        }
+        return path;
     }
 
     public virtual void OnDrop(bool enablePhysics = true)
     {
         isHeld = false;
         
-        // Usar el mismo transform que se usó en OnPickUp
-        Transform objectToMove = (rb != null) ? rb.transform : transform;
+        // Usar la misma lógica que OnPickUp para encontrar el objeto raíz
+        Transform objectToMove = null;
+        
+        if (rb != null)
+        {
+            objectToMove = rb.transform;
+        }
+        else
+        {
+            objectToMove = transform.root;
+            if (objectToMove == transform)
+            {
+                objectToMove = transform;
+            }
+        }
+        
         objectToMove.SetParent(null);
         
         if (enablePhysics)
@@ -66,9 +122,11 @@ public abstract class PickupableObject : MonoBehaviour
                 // rb.AddForce(transform.forward * 2f, ForceMode.Impulse);
             }
             
-            if (coll)
+            // Reactivar TODOS los colliders
+            Collider[] allColliders = objectToMove.GetComponentsInChildren<Collider>();
+            foreach (Collider col in allColliders)
             {
-                coll.enabled = true;
+                col.enabled = true;
             }
         }
         else
@@ -78,9 +136,12 @@ public abstract class PickupableObject : MonoBehaviour
             {
                 rb.isKinematic = true;
             }
-            if (coll)
+            
+            // Mantener colliders desactivados
+            Collider[] allColliders = objectToMove.GetComponentsInChildren<Collider>();
+            foreach (Collider col in allColliders)
             {
-                coll.enabled = false;
+                col.enabled = false;
             }
         }
     }

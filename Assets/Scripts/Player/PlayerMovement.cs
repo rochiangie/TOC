@@ -102,7 +102,7 @@ public class PlayerMovement : MonoBehaviour
     }
 
     [Header("Configuración de Rotación")]
-    public bool rotateWithCamera = true; // Si es true, el personaje siempre mira a la cámara (Estilo Shooter/Strafing)
+    public bool rotateWithCamera = false; // Ahora el mouse rota al jugador directamente (controlado por PlayerCamera)
 
     // ... (resto de variables)
 

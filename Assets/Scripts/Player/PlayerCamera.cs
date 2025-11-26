@@ -3,10 +3,16 @@ using UnityEngine;
 public class PlayerCamera : MonoBehaviour
 {
     [Header("Settings")]
-    public float mouseSensitivity = 150f;
+    public float mouseSensitivity = 100f; // Reducido de 150 a 100 para menos sensibilidad
     public Transform playerBody;
     // Usamos un offset "plano" para que la rotación sea esférica perfecta alrededor del FocusPoint
-    public Vector3 offset = new Vector3(0, 0, -3f); 
+    public Vector3 offset = new Vector3(0, 0, -3f);
+    
+    [Header("Camera Rotation Limits")]
+    [Tooltip("Ángulo mínimo de rotación vertical (mirar hacia abajo). Valor negativo.")]
+    public float minPitch = -40f; // Mirar hacia abajo (típico: -30 a -45)
+    [Tooltip("Ángulo máximo de rotación vertical (mirar hacia arriba). Valor positivo.")]
+    public float maxPitch = 60f;  // Mirar hacia arriba (típico: 50 a 70) 
 
     [Header("Collision")]
     public LayerMask collisionLayers = ~0;
@@ -57,7 +63,7 @@ public class PlayerCamera : MonoBehaviour
 
         // Inicializar ángulos
         Vector3 angles = transform.eulerAngles;
-        pitch = angles.x;
+        pitch = NormalizeAngle(angles.x);
         yaw = angles.y;
     }
 
@@ -79,12 +85,21 @@ public class PlayerCamera : MonoBehaviour
         float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * Time.deltaTime;
         float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity * Time.deltaTime;
 
-        yaw += mouseX;
+        // CAMBIO IMPORTANTE: El mouse horizontal rota al JUGADOR, no la cámara
+        // Rotar el cuerpo del jugador con el mouse horizontal
+        playerBody.Rotate(Vector3.up * mouseX);
+        
+        // El yaw ahora viene del jugador
+        yaw = playerBody.eulerAngles.y;
+        
+        // Solo el pitch (vertical) se controla con el mouse
         pitch -= mouseY;
-        // Rango ampliado casi al máximo vertical (-85 a 85 grados)
-        pitch = Mathf.Clamp(pitch, -85f, 85f); 
+        // Normalizar el ángulo para mantenerlo en el rango -180 a 180
+        pitch = NormalizeAngle(pitch);
+        // Limitar rotación vertical para evitar que la cámara se voltee
+        pitch = Mathf.Clamp(pitch, minPitch, maxPitch); 
 
-        // Rotación deseada
+        // Rotación deseada (combina el yaw del jugador con el pitch de la cámara)
         Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
 
         // Posición deseada (Orbitando al jugador)
@@ -110,5 +125,18 @@ public class PlayerCamera : MonoBehaviour
 
         // Mirar siempre al punto de foco
         transform.LookAt(focusPoint);
+    }
+
+    /// <summary>
+    /// Normaliza un ángulo para que esté en el rango de -180 a 180 grados.
+    /// Esto previene problemas cuando los ángulos se acumulan más allá de 360 grados.
+    /// </summary>
+    private float NormalizeAngle(float angle)
+    {
+        while (angle > 180f)
+            angle -= 360f;
+        while (angle < -180f)
+            angle += 360f;
+        return angle;
     }
 }
