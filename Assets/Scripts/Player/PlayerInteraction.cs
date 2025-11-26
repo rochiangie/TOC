@@ -21,6 +21,19 @@ public class PlayerInteraction : MonoBehaviour
     private PickupableObject currentHeldObject;
     private bool isPickingUp = false; // Para prevenir múltiples recogidas durante la animación
 
+    // ===================================
+    // PROPERTIES PÚBLICAS (Solo lectura)
+    // ===================================
+    
+    /// <summary>Obtiene el objeto actualmente sostenido por el jugador</summary>
+    public PickupableObject CurrentHeldObject => currentHeldObject;
+    
+    /// <summary>Indica si el jugador tiene un objeto en la mano</summary>
+    public bool HasObject => currentHeldObject != null;
+    
+    /// <summary>Indica si el jugador está en proceso de recoger un objeto</summary>
+    public bool IsPickingUp => isPickingUp;
+
     private void Start()
     {
         // 1. Usar la Cámara Principal (Normal)
@@ -138,6 +151,9 @@ public class PlayerInteraction : MonoBehaviour
         currentHeldObject = pickup;
         currentHeldObject.OnPickUp(holdPoint);
         
+        // 4. Disparar evento de recogida (AudioManager se suscribe automáticamente)
+        GameEvents.TrashPickedUp();
+        
         Debug.Log($"✅ Objeto '{pickup.gameObject.name}' ahora en la mano del jugador");
         
         isPickingUp = false;
@@ -184,28 +200,6 @@ public class PlayerInteraction : MonoBehaviour
                                 FeedbackMessageUI.Instance.ShowError(
                                     $"❌ ¡Basurero Incorrecto!\n" +
                                     $"Este basurero es para: {binColorName}\n" +
-                                    $"Tu basura es: {trashColorName}",
-                                    3f
-                                );
-                            }
-                            
-                            return; // No permitir la acción
-                        }
-                        
-                        // ✅ TIPO CORRECTO
-                        Debug.Log($"✅ ¡Correcto! Basura {trashObj.trashType} en basurero {bin.trashType}");
-                        
-                        // Mostrar mensaje de éxito
-                        if (FeedbackMessageUI.Instance != null)
-                        {
-                            FeedbackMessageUI.Instance.ShowSuccess("✅ ¡Excelente! Basura clasificada correctamente", 2f);
-                        }
-                    }
-                    
-                    // 1. Activar animación de tirar
-                    if (animator != null) animator.SetTrigger("Throw");
-                    
-                    // 2. Soltar el objeto de la mano del jugador (SIN activar física)
                     PickupableObject objectToTrash = currentHeldObject;
                     currentHeldObject.OnDrop(false); // false = no activar física, será absorbido
                     currentHeldObject = null;
